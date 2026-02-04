@@ -1,5 +1,7 @@
 // خدمة الصيانة والتحسينات
 
+import { db, ensureUserExists } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { taskProcessor } from './task-processor';
@@ -14,9 +16,10 @@ export class MaintenanceService {
 
     let deletedCount = 0;
 
-    const allTasks = Array.from((db as any).tasks.values());
-    for (const task of allTasks) {
-      const executions = db.getTaskExecutions(task.id);
+    const user = await ensureUserExists('demo-user');
+    const tasks = await db.getUserTasks(user.id);
+    for (const task of tasks) {
+      const executions = await db.getTaskExecutions(task.id);
       const toDelete = executions.filter(e => e.executedAt < cutoffDate);
       
       for (const exec of toDelete) {
@@ -42,10 +45,10 @@ export class MaintenanceService {
   async rebuildStatistics(): Promise<void> {
     logger.info('[Maintenance] Rebuilding statistics...');
     
-    const users = Array.from((db as any).users.values());
-    for (const user of users) {
-      const tasks = db.getUserTasks(user.id);
-      const accounts = db.getUserAccounts(user.id);
+    const user = await ensureUserExists('demo-user');
+    if (user) {
+      const tasks = await db.getUserTasks(user.id);
+      const accounts = await db.getUserAccounts(user.id);
       
       logger.info(
         `[Maintenance] User ${user.id}: ${tasks.length} tasks, ${accounts.length} accounts`
@@ -59,8 +62,9 @@ export class MaintenanceService {
   async checkExpiredTokens(): Promise<string[]> {
     const expiredTokens: string[] = [];
     
-    const allAccounts = Array.from((db as any).accounts.values());
-    for (const account of allAccounts) {
+    const user = await ensureUserExists('demo-user');
+    const accounts = await db.getUserAccounts(user.id);
+    for (const account of accounts) {
       // في الإنتاج: تحقق من صلاحية التوكنات
       if (Math.random() > 0.9) {
         expiredTokens.push(account.id);
@@ -76,9 +80,9 @@ export class MaintenanceService {
   async refreshCache(): Promise<void> {
     logger.info('[Maintenance] Refreshing cache...');
     
-    const users = Array.from((db as any).users.values());
-    for (const user of users) {
-      const tasks = db.getUserTasks(user.id);
+    const user = await ensureUserExists('demo-user');
+    if (user) {
+      const tasks = await db.getUserTasks(user.id);
       // إعادة بناء الذاكرة المؤقتة للمهام النشطة
       for (const task of tasks.filter(t => t.status === 'active')) {
         logger.info(`[Cache] Cached task: ${task.name}`);
@@ -106,10 +110,10 @@ export class MaintenanceService {
     const metrics: Record<string, any> = {};
 
     // فحص قاعدة البيانات
-    const users = Array.from((db as any).users.values());
-    const totalUsers = users.length;
-    const totalTasks = Array.from((db as any).tasks.values()).length;
-    const totalAccounts = Array.from((db as any).accounts.values()).length;
+    const user = await ensureUserExists('demo-user');
+    const totalUsers = user ? 1 : 0;
+    const totalTasks = user ? (await db.getUserTasks(user.id)).length : 0;
+    const totalAccounts = user ? (await db.getUserAccounts(user.id)).length : 0;
 
     metrics.totalUsers = totalUsers;
     metrics.totalTasks = totalTasks;
@@ -117,9 +121,12 @@ export class MaintenanceService {
 
     // فحص التنفيذات الفاشلة
     let failedExecutions = 0;
-    for (const [, task] of (db as any).tasks) {
-      const executions = db.getTaskExecutions(task.id);
-      failedExecutions += executions.filter(e => e.status === 'failed').length;
+    if (user) {
+      const tasks = await db.getUserTasks(user.id);
+      for (const task of tasks) {
+        const executions = await db.getTaskExecutions(task.id);
+        failedExecutions += executions.filter(e => e.status === 'failed').length;
+      }
     }
 
     metrics.failedExecutions = failedExecutions;
@@ -129,9 +136,9 @@ export class MaintenanceService {
     }
 
     // فحص الحسابات غير النشطة
-    const inactiveAccounts = Array.from((db as any).accounts.values()).filter(
-      a => !a.isActive
-    ).length;
+    const inactiveAccounts = user
+      ? (await db.getUserAccounts(user.id)).filter(a => !a.isActive).length
+      : 0;
 
     metrics.inactiveAccounts = inactiveAccounts;
 

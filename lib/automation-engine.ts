@@ -1,13 +1,11 @@
 import {
-  AutomationTask,
-  ScheduledPost,
   ContentItem,
   ExecutionError,
   TaskExecution,
   PlatformAccount,
   SocialPlatform,
 } from './types'
-import { db } from './db'
+import { db, type Task, type PlatformAccount as DbAccount } from './db'
 import { platformManager } from './platform-manager'
 
 /**
@@ -17,15 +15,14 @@ export class AutomationEngine {
   /**
    * Execute a single automation task
    */
-  async executeTask(task: AutomationTask, accounts: Map<string, PlatformAccount>): Promise<TaskExecution> {
+  async executeTask(task: Task, accounts: Map<string, PlatformAccount>): Promise<TaskExecution> {
     const startTime = Date.now()
     const errors: ExecutionError[] = []
     let itemsProcessed = 0
     let itemsFailed = 0
 
     try {
-      // Get source accounts
-      const sourceAccounts = Array.from(task.sourceAccountIds)
+      const sourceAccounts = task.sourceAccounts
         .map(id => accounts.get(id))
         .filter((a): a is PlatformAccount => a !== undefined)
 
@@ -33,8 +30,7 @@ export class AutomationEngine {
         throw new Error('No valid source accounts found')
       }
 
-      // Get destination accounts
-      const destAccounts = Array.from(task.destinationAccountIds)
+      const destAccounts = task.targetAccounts
         .map(id => accounts.get(id))
         .filter((a): a is PlatformAccount => a !== undefined)
 
@@ -42,7 +38,6 @@ export class AutomationEngine {
         throw new Error('No valid destination accounts found')
       }
 
-      // Initialize platform clients
       for (const account of [...sourceAccounts, ...destAccounts]) {
         try {
           await platformManager.initializeClient(account)
@@ -58,23 +53,19 @@ export class AutomationEngine {
         }
       }
 
-      // For now, we'll process one item (in production, you'd fetch from source platforms)
       itemsProcessed = 1
 
-      // Get content to distribute (example)
       const contentToDistribute: ContentItem = {
-        type: 'text',
-        text: 'Automated cross-platform post from SocialFlow',
+        type: task.contentType,
+        text: task.description,
       }
 
-      // Distribute to destination accounts
       const results = await platformManager.distributeContent(
         destAccounts,
         contentToDistribute,
         (text, platform) => this.transformContent(text, platform, task)
       )
 
-      // Check results
       for (const result of results) {
         if (!result.result.success) {
           itemsFailed++
@@ -89,12 +80,7 @@ export class AutomationEngine {
         }
       }
 
-      // Update task statistics
-      await db.updateTask(task.id, {
-        executionCount: task.executionCount + 1,
-        failureCount: task.failureCount + itemsFailed,
-        lastError: itemsFailed > 0 ? errors[0]?.message : undefined,
-      })
+      await db.updateTask(task.id, { lastExecuted: new Date() })
     } catch (error) {
       itemsFailed++
       const message = error instanceof Error ? error.message : 'Unknown error'
@@ -126,54 +112,24 @@ export class AutomationEngine {
   /**
    * Transform content for different platforms
    */
-  private transformContent(text: string, platform: SocialPlatform, task: AutomationTask): string {
-    const { contentTransformation } = task
-
+  private transformContent(text: string, platform: SocialPlatform, task: Task): string {
     let transformed = text
 
-    // Apply text transformations
-    if (contentTransformation.textTransform) {
-      switch (contentTransformation.textTransform) {
-        case 'uppercase':
-          transformed = transformed.toUpperCase()
-          break
-        case 'lowercase':
-          transformed = transformed.toLowerCase()
-          break
-        case 'capitalize':
-          transformed = transformed.charAt(0).toUpperCase() + transformed.slice(1)
-          break
-      }
+    if (task.transformations?.prependText) {
+      transformed = `${task.transformations.prependText}\n${transformed}`
     }
 
-    // Add platform-specific hashtags
-    if (contentTransformation.addHashtags && contentTransformation.addHashtags.length > 0) {
-      transformed += '\n\n' + contentTransformation.addHashtags.join(' ')
+    if (task.transformations?.appendText) {
+      transformed = `${transformed}\n${task.transformations.appendText}`
     }
 
-    // Add custom text
-    if (contentTransformation.appendText) {
-      transformed += '\n' + contentTransformation.appendText
+    if (task.transformations?.addHashtags?.length) {
+      transformed += `\n\n${task.transformations.addHashtags.join(' ')}`
     }
 
-    if (contentTransformation.prependText) {
-      transformed = contentTransformation.prependText + '\n' + transformed
-    }
-
-    // Apply platform-specific text limits
     const maxLength = this.getPlatformMaxLength(platform)
-    if (contentTransformation.maxLength) {
-      const limit = Math.min(contentTransformation.maxLength, maxLength)
-      if (transformed.length > limit) {
-        transformed = transformed.substring(0, limit - 3) + '...'
-      }
-    } else if (transformed.length > maxLength) {
+    if (transformed.length > maxLength) {
       transformed = transformed.substring(0, maxLength - 3) + '...'
-    }
-
-    // Add source attribution if enabled
-    if (contentTransformation.includeSource) {
-      transformed += '\n\n[Cross-posted via SocialFlow]'
     }
 
     return transformed
@@ -208,54 +164,27 @@ export class AutomationEngine {
   /**
    * Schedule a task to run at specific times
    */
-  scheduleTask(task: AutomationTask): Date | null {
-    if (!task.schedule) return null
+  scheduleTask(task: Task): Date | null {
+    if (task.executionType === 'scheduled' && task.scheduleTime) {
+      return task.scheduleTime
+    }
 
-    const schedule = task.schedule
-    let nextRun = new Date()
+    if (task.executionType !== 'recurring') return null
 
-    switch (schedule.frequency) {
-      case 'once':
-        // Already scheduled, just return the scheduled time
-        return task.nextScheduledRun || null
+    const nextRun = new Date()
 
-      case 'hourly':
-        nextRun.setHours(nextRun.getHours() + 1)
-        break
-
+    switch (task.recurringPattern) {
       case 'daily':
-        if (schedule.timeOfDay) {
-          const [hours, minutes] = schedule.timeOfDay.split(':').map(Number)
-          nextRun.setHours(hours, minutes, 0, 0)
-          if (nextRun <= new Date()) {
-            nextRun.setDate(nextRun.getDate() + 1)
-          }
-        } else {
-          nextRun.setDate(nextRun.getDate() + 1)
-        }
+        nextRun.setDate(nextRun.getDate() + 1)
         break
-
       case 'weekly':
-        if (schedule.dayOfWeek && schedule.dayOfWeek.length > 0) {
-          const today = nextRun.getDay()
-          const nextDay = schedule.dayOfWeek.find(d => d > today) || schedule.dayOfWeek[0]
-          const daysToAdd = (nextDay - today + 7) % 7 || 7
-
-          nextRun.setDate(nextRun.getDate() + daysToAdd)
-          if (schedule.timeOfDay) {
-            const [hours, minutes] = schedule.timeOfDay.split(':').map(Number)
-            nextRun.setHours(hours, minutes, 0, 0)
-          }
-        }
+        nextRun.setDate(nextRun.getDate() + 7)
         break
-
       case 'monthly':
         nextRun.setMonth(nextRun.getMonth() + 1)
-        if (schedule.timeOfDay) {
-          const [hours, minutes] = schedule.timeOfDay.split(':').map(Number)
-          nextRun.setHours(hours, minutes, 0, 0)
-        }
         break
+      default:
+        return null
     }
 
     return nextRun
@@ -264,13 +193,32 @@ export class AutomationEngine {
   /**
    * Get tasks that are due to run
    */
-  async getTasksDueForExecution(): Promise<AutomationTask[]> {
+  async getTasksDueForExecution(): Promise<Task[]> {
     const allTasks = await db.getActiveTasks()
     const now = new Date()
 
     return allTasks.filter(task => {
-      if (!task.nextScheduledRun) return false
-      return task.nextScheduledRun <= now
+      if (task.executionType === 'scheduled' && task.scheduleTime) {
+        return task.scheduleTime <= now
+      }
+
+      if (task.executionType === 'recurring' && task.recurringPattern) {
+        if (!task.lastExecuted) return true
+        const last = task.lastExecuted
+        const diff = now.getTime() - last.getTime()
+        switch (task.recurringPattern) {
+          case 'daily':
+            return diff >= 24 * 60 * 60 * 1000
+          case 'weekly':
+            return diff >= 7 * 24 * 60 * 60 * 1000
+          case 'monthly':
+            return diff >= 30 * 24 * 60 * 60 * 1000
+          default:
+            return false
+        }
+      }
+
+      return task.executionType === 'immediate'
     })
   }
 
@@ -278,7 +226,7 @@ export class AutomationEngine {
    * Process execution with retry logic
    */
   async executeWithRetry(
-    task: AutomationTask,
+    task: Task,
     accounts: Map<string, PlatformAccount>,
     maxRetries = 3
   ): Promise<TaskExecution> {
@@ -294,9 +242,8 @@ export class AutomationEngine {
 
         lastError = execution
 
-        // Wait before retry (exponential backoff)
         if (attempt < maxRetries - 1) {
-          const delay = Math.pow(2, attempt) * 1000 // 1s, 2s, 4s...
+          const delay = Math.pow(2, attempt) * 1000
           await new Promise(resolve => setTimeout(resolve, delay))
         }
       } catch (error) {
@@ -346,7 +293,35 @@ export class AutomationEngine {
       }
     )
   }
+
+  async buildAccountMap(userId: string): Promise<Map<string, PlatformAccount>> {
+    const map = new Map<string, PlatformAccount>()
+    const accounts = await db.getUserAccounts(userId)
+    for (const account of accounts) {
+      map.set(account.id, this.toPlatformAccount(account))
+    }
+    return map
+  }
+
+  private toPlatformAccount(account: DbAccount): PlatformAccount {
+    return {
+      id: account.id,
+      userId: account.userId,
+      platform: account.platformId as SocialPlatform,
+      accountId: account.accountId,
+      username: account.accountUsername,
+      displayName: account.accountName,
+      authType: 'manual',
+      isActive: account.isActive,
+      credentials: {
+        accessToken: account.accessToken,
+        refreshToken: account.refreshToken,
+        customData: account.credentials,
+      },
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+    }
+  }
 }
 
-// Singleton instance
 export const automationEngine = new AutomationEngine()

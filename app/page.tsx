@@ -6,6 +6,9 @@ import { Header } from '@/components/layout/header';
 import { StatCard } from '@/components/common/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { logger } from '@/lib/logger';
+import type { Task, TaskExecution } from '@/lib/db';
+
 import { db, type Task } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { BarChart3, Zap, Users, TrendingUp, Plus, ArrowRight } from 'lucide-react';
@@ -20,9 +23,29 @@ export default function DashboardPage() {
   });
 
   const [recentTasks, setRecentTasks] = useState<Task[]>([]);
-  const [recentExecutions, setRecentExecutions] = useState<any[]>([]);
+  const [recentExecutions, setRecentExecutions] = useState<TaskExecution[]>([]);
 
   useEffect(() => {
+    const loadDashboard = async () => {
+      logger.info('[v0] Dashboard: Component mounted');
+      try {
+        const response = await fetch('/api/dashboard?userId=demo-user');
+        const payload = await response.json();
+
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to load dashboard');
+        }
+
+        setStats(payload.stats);
+        setRecentTasks(payload.recentTasks ?? []);
+        setRecentExecutions(payload.recentExecutions ?? []);
+        logger.info('[v0] Dashboard: Dashboard data loaded successfully');
+      } catch (error) {
+        logger.error('[v0] Dashboard: Error loading dashboard data:', error);
+      }
+    };
+
+    void loadDashboard();
     logger.info('[v0] Dashboard: Component mounted');
     
     try {
@@ -205,7 +228,7 @@ export default function DashboardPage() {
                             Transfer executed
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(execution.executedAt).toLocaleDateString()}
+                          {new Date(execution.executedAt).toLocaleDateString()}
                           </p>
                         </div>
                       </div>

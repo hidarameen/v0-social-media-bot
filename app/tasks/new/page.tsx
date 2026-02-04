@@ -1,7 +1,5 @@
 'use client';
 
-import React from "react"
-
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
@@ -16,10 +14,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { db, type PlatformAccount } from '@/lib/db';
+import type { PlatformAccount } from '@/lib/db';
+import { db, type PlatformAccount } from '@/lib/db'; 
 import { logger } from '@/lib/logger';
 import { platformConfigs } from '@/lib/platforms/handlers';
-import { ArrowRight, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function CreateTaskPage() {
@@ -39,6 +38,23 @@ export default function CreateTaskPage() {
   const [selectedTargetPlatform, setSelectedTargetPlatform] = useState('');
 
   useEffect(() => {
+    const loadAccounts = async () => {
+      logger.info('[v0] CreateTaskPage: Component mounted');
+      try {
+        const response = await fetch('/api/accounts?userId=demo-user');
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to load accounts');
+        }
+        logger.info('[v0] CreateTaskPage: User accounts:', payload.accounts.length);
+        setAccounts(payload.accounts);
+      } catch (error) {
+        logger.error('[v0] CreateTaskPage: Failed to load accounts:', error);
+      }
+    };
+
+    void loadAccounts();
+
     logger.info('[v0] CreateTaskPage: Component mounted');
     const users = Array.from((db as any).users.values());
     logger.info('[v0] CreateTaskPage: Found users:', users.length);
@@ -60,7 +76,7 @@ export default function CreateTaskPage() {
     a => a.platformId === selectedTargetPlatform
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     logger.info('[v0] handleSubmit: Form submitted');
     logger.info('[v0] formData:', formData);
@@ -71,6 +87,12 @@ export default function CreateTaskPage() {
       return;
     }
 
+    try {
+      logger.info('[v0] handleSubmit: Creating task for user: demo-user');
+      const response = await fetch('/api/tasks?userId=demo-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
     const users = Array.from((db as any).users.values());
     logger.info('[v0] handleSubmit: Users found:', users.length);
     const user = users[0];
@@ -87,8 +109,21 @@ export default function CreateTaskPage() {
           contentType: 'text',
           status: 'active',
           executionType: formData.executionType,
-          scheduleTime: formData.scheduleTime ? new Date(formData.scheduleTime) : undefined,
+          scheduleTime: formData.scheduleTime || undefined,
           recurringPattern: formData.recurringPattern,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to create task');
+      }
+
+      logger.info('[v0] handleSubmit: Task created successfully:', payload.task?.id);
+      router.push('/tasks');
+    } catch (error) {
+      logger.error('[v0] handleSubmit: Error creating task:', error);
+
         });
         logger.info('[v0] handleSubmit: Task created successfully:', taskId);
         router.push('/tasks');
@@ -97,6 +132,7 @@ export default function CreateTaskPage() {
       }
     } else {
       logger.error('[v0] handleSubmit: No user found');
+ 
     }
   };
 

@@ -5,10 +5,8 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { StatCard } from '@/components/common/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { db, type Task } from '@/lib/db';
-import { taskProcessor } from '@/lib/services/task-processor';
+import { logger } from '@/lib/logger';
 import {
-  BarChart3,
   TrendingUp,
   CheckCircle,
   AlertCircle,
@@ -28,44 +26,23 @@ export default function AnalyticsPage() {
   const [taskStats, setTaskStats] = useState<any[]>([]);
 
   useEffect(() => {
-    const users = Array.from((db as any).users.values());
-    const user = users[0];
+    const loadAnalytics = async () => {
+      try {
+        const response = await fetch('/api/analytics?userId=demo-user');
+        const payload = await response.json();
 
-    if (user) {
-      const userTasks = db.getUserTasks(user.id);
-      const allExecutions = userTasks.flatMap(t => db.getTaskExecutions(t.id));
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to load analytics');
+        }
 
-      const successful = allExecutions.filter(e => e.status === 'success').length;
-      const failed = allExecutions.filter(e => e.status === 'failed').length;
-      const total = allExecutions.length;
+        setStats(payload.stats);
+        setTaskStats(payload.taskStats ?? []);
+      } catch (error) {
+        logger.error('[v0] AnalyticsPage: Failed to load analytics:', error);
+      }
+    };
 
-      setStats({
-        totalExecutions: total,
-        successfulExecutions: successful,
-        failedExecutions: failed,
-        successRate: total > 0 ? ((successful / total) * 100).toFixed(2) : '0',
-        averageExecutionTime: '245ms',
-      });
-
-      // Stats per task
-      const stats = userTasks.map(task => {
-        const executions = db.getTaskExecutions(task.id);
-        const successful = executions.filter(e => e.status === 'success').length;
-        return {
-          taskId: task.id,
-          taskName: task.name,
-          totalExecutions: executions.length,
-          successful,
-          failed: executions.length - successful,
-          successRate:
-            executions.length > 0
-              ? ((successful / executions.length) * 100).toFixed(0)
-              : 0,
-        };
-      });
-
-      setTaskStats(stats);
-    }
+    void loadAnalytics();
   }, []);
 
   return (

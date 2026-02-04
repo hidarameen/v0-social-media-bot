@@ -6,6 +6,7 @@ import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { Task } from '@/lib/db';
 import { db, type Task } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { Plus, Search, Edit2, Trash2, Play, Pause, ExternalLink } from 'lucide-react';
@@ -17,6 +18,23 @@ export default function TasksPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
+    const loadTasks = async () => {
+      logger.info('[v0] TasksPage: Component mounted');
+      try {
+        const response = await fetch('/api/tasks?userId=demo-user');
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to fetch tasks');
+        }
+        logger.info('[v0] TasksPage: Tasks loaded:', payload.tasks.length);
+        setTasks(payload.tasks);
+        setFilteredTasks(payload.tasks);
+      } catch (error) {
+        logger.error('[v0] TasksPage: Failed to load tasks:', error);
+      }
+    };
+
+    void loadTasks();
     logger.info('[v0] TasksPage: Component mounted');
     const users = Array.from((db as any).users.values());
     logger.info('[v0] TasksPage: Found users:', users.length);
@@ -41,6 +59,18 @@ export default function TasksPage() {
     setFilteredTasks(filtered);
   }, [searchTerm, tasks]);
 
+  const handleDelete = async (taskId: string) => {
+    logger.info('[v0] handleDelete: Attempting to delete task:', taskId);
+    if (confirm('Are you sure you want to delete this task?')) {
+      try {
+        const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to delete task');
+        }
+        logger.info('[v0] handleDelete: Task deleted successfully');
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+
   const handleDelete = (taskId: string) => {
     logger.info('[v0] handleDelete: Attempting to delete task:', taskId);
     if (confirm('Are you sure you want to delete this task?')) {
@@ -54,10 +84,22 @@ export default function TasksPage() {
     }
   };
 
-  const handleToggleStatus = (task: Task) => {
+  const handleToggleStatus = async (task: Task) => {
     const newStatus = task.status === 'active' ? 'paused' : 'active';
     logger.info('[v0] handleToggleStatus: Changing status of task:', task.id, 'to:', newStatus);
     try {
+      const response = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to update task');
+      }
+      logger.info('[v0] handleToggleStatus: Status updated successfully');
+      setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, status: newStatus } : t)));
+
       db.updateTask(task.id, { status: newStatus as any });
       logger.info('[v0] handleToggleStatus: Status updated successfully');
       setTasks(tasks.map(t => (t.id === task.id ? { ...t, status: newStatus as any } : t)));
