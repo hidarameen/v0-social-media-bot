@@ -1,5 +1,7 @@
 // أدوات API والاستدعاءات المساعدة
 
+import { logger } from '@/lib/logger';
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -44,7 +46,7 @@ export async function safeApiCall<T>(
       },
     };
   } catch (error) {
-    console.error(`[API] Error in ${context}:`, error);
+    logger.error(`[API] Error in ${context}:`, error);
 
     if (error instanceof ApiError) {
       return {
@@ -336,7 +338,7 @@ export class TaskQueue {
         try {
           await task();
         } catch (error) {
-          console.error('[TaskQueue] Error processing task:', error);
+          logger.error('[TaskQueue] Error processing task:', error);
         }
       }
     }

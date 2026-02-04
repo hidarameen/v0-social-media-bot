@@ -27,6 +27,7 @@ import {
   Linkedin,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 const platforms = [
   { id: 'facebook', name: 'Facebook', icon: Facebook },
@@ -98,7 +99,7 @@ export default function CreateTaskPage() {
       createdAt: new Date().toISOString(),
     }
 
-    console.log('[v0] New task created:', taskData)
+    logger.info('[v0] New task created:', taskData)
     toast.success('Automation task created successfully!')
     
     // Reset form
