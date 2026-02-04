@@ -5,6 +5,7 @@ import { InstagramClient } from '@/platforms/instagram/client'
 import { TikTokClient } from '@/platforms/tiktok/client'
 import { YouTubeClient } from '@/platforms/youtube/client'
 import { TelegramClient } from '@/platforms/telegram/client'
+import { logger } from '@/lib/logger'
 
 /**
  * Unified Platform Manager - Handles all social media platforms
@@ -71,7 +72,7 @@ export class PlatformManager {
           break
       }
     } catch (error) {
-      console.error(`Failed to initialize ${platform} client:`, error)
+      logger.error(`Failed to initialize ${platform} client:`, error)
       throw error
     }
   }

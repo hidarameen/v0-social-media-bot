@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureUserExists, getOrCreateAccount } from '@/lib/db'
 import { PlatformAccount } from '@/lib/types'
+import { logger } from '@/lib/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({ success: true, accounts })
   } catch (error) {
-    console.error('[API] Error fetching accounts:', error)
+    logger.error('[API] Error fetching accounts:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to fetch accounts' },
       { status: 500 }
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, account }, { status: 201 })
   } catch (error) {
-    console.error('[API] Error creating account:', error)
+    logger.error('[API] Error creating account:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to create account' },
       { status: 500 }

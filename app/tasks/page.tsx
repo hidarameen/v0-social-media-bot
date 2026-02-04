@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { db, type Task } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { Plus, Search, Edit2, Trash2, Play, Pause, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
@@ -16,19 +17,19 @@ export default function TasksPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    console.log('[v0] TasksPage: Component mounted');
+    logger.info('[v0] TasksPage: Component mounted');
     const users = Array.from((db as any).users.values());
-    console.log('[v0] TasksPage: Found users:', users.length);
+    logger.info('[v0] TasksPage: Found users:', users.length);
     const user = users[0];
 
     if (user) {
-      console.log('[v0] TasksPage: Loading tasks for user:', user.id);
+      logger.info('[v0] TasksPage: Loading tasks for user:', user.id);
       const userTasks = db.getUserTasks(user.id);
-      console.log('[v0] TasksPage: Tasks loaded:', userTasks.length);
+      logger.info('[v0] TasksPage: Tasks loaded:', userTasks.length);
       setTasks(userTasks);
       setFilteredTasks(userTasks);
     } else {
-      console.warn('[v0] TasksPage: No users found');
+      logger.warn('[v0] TasksPage: No users found');
     }
   }, []);
 
@@ -41,27 +42,27 @@ export default function TasksPage() {
   }, [searchTerm, tasks]);
 
   const handleDelete = (taskId: string) => {
-    console.log('[v0] handleDelete: Attempting to delete task:', taskId);
+    logger.info('[v0] handleDelete: Attempting to delete task:', taskId);
     if (confirm('Are you sure you want to delete this task?')) {
       try {
         db.deleteTask(taskId);
-        console.log('[v0] handleDelete: Task deleted successfully');
+        logger.info('[v0] handleDelete: Task deleted successfully');
         setTasks(tasks.filter(t => t.id !== taskId));
       } catch (error) {
-        console.error('[v0] handleDelete: Error deleting task:', error);
+        logger.error('[v0] handleDelete: Error deleting task:', error);
       }
     }
   };
 
   const handleToggleStatus = (task: Task) => {
     const newStatus = task.status === 'active' ? 'paused' : 'active';
-    console.log('[v0] handleToggleStatus: Changing status of task:', task.id, 'to:', newStatus);
+    logger.info('[v0] handleToggleStatus: Changing status of task:', task.id, 'to:', newStatus);
     try {
       db.updateTask(task.id, { status: newStatus as any });
-      console.log('[v0] handleToggleStatus: Status updated successfully');
+      logger.info('[v0] handleToggleStatus: Status updated successfully');
       setTasks(tasks.map(t => (t.id === task.id ? { ...t, status: newStatus as any } : t)));
     } catch (error) {
-      console.error('[v0] handleToggleStatus: Error updating status:', error);
+      logger.error('[v0] handleToggleStatus: Error updating status:', error);
     }
   };
 
