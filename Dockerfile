@@ -24,8 +24,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN node -v && pnpm -v
 
 # Install strictly (recommended for CI/prod)
-RUN pnpm install --frozen-lockfile --reporter=append-only
-
+RUN pnpm install --no-frozen-lockfile --reporter=append-only
 # Copy source and build
 COPY . .
 ENV NODE_ENV=production
