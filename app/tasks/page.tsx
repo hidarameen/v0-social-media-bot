@@ -35,6 +35,7 @@ export default function TasksPage() {
     };
 
     void loadTasks();
+
     logger.info('[v0] TasksPage: Component mounted');
     const users = Array.from((db as any).users.values());
     logger.info('[v0] TasksPage: Found users:', users.length);
@@ -61,6 +62,15 @@ export default function TasksPage() {
 
   const handleDelete = async (taskId: string) => {
     logger.info('[v0] handleDelete: Attempting to delete task:', taskId);
+    if (confirm('Are you sure you want to delete this task?')) {
+      try {
+        const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to delete task');
+        }
+        logger.info('[v0] handleDelete: Task deleted successfully');
+        setTasks(prev => prev.filter(t => t.id !== taskId));
     if (confirm('Are you sure you want to delete this task?')) {
       try {
         const response = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });

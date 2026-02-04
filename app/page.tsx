@@ -46,6 +46,11 @@ export default function DashboardPage() {
     };
 
     void loadDashboard();
+
+      }
+    };
+
+    void loadDashboard();
     logger.info('[v0] Dashboard: Component mounted');
     
     try {
