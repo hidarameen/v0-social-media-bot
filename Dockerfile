@@ -1,35 +1,35 @@
 # =========================
-# Dockerfile (pnpm + alpine)
+# Dockerfile (pnpm + alpine) - fixed
 # =========================
-
 FROM node:20-alpine
 
 WORKDIR /app
 
-# --- System deps often needed for native Node modules on Alpine ---
-# libc6-compat helps with some prebuilt binaries compatibility
+# Native deps for some packages on Alpine
 RUN apk add --no-cache \
-    libc6-compat \
-    python3 \
-    make \
-    g++
+  libc6-compat \
+  python3 \
+  make \
+  g++
 
-# --- Enable pnpm via corepack and pin a stable pnpm version ---
+# pnpm via corepack (pin version to avoid lockfile/tooling drift)
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-RUN corepack enable \
- && corepack prepare pnpm@9.15.0 --activate
-
-# --- Install dependencies using pnpm lockfile ---
+# Copy manifests first (better caching)
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
 
-# --- Copy source then build ---
+# Debug versions (helps if build service hides logs)
+RUN node -v && pnpm -v
+
+# Install strictly (recommended for CI/prod)
+RUN pnpm install --frozen-lockfile --reporter=append-only
+
+# Copy source and build
 COPY . .
+ENV NODE_ENV=production
 RUN pnpm build
 
 EXPOSE 3000
-
-# --- Start app ---
 CMD ["pnpm", "start"]
