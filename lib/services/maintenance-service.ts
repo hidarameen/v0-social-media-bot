@@ -1,6 +1,7 @@
 // خدمة الصيانة والتحسينات
 
 import { db } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { taskProcessor } from './task-processor';
 
 export class MaintenanceService {
@@ -32,21 +33,23 @@ export class MaintenanceService {
    */
   async compressData(): Promise<void> {
     // في الإنتاج: استخدم VACUUM في PostgreSQL
-    console.log('[Maintenance] Compressing database...');
+    logger.info('[Maintenance] Compressing database...');
   }
 
   /**
    * تحسين الأداء: حساب الإحصائيات
    */
   async rebuildStatistics(): Promise<void> {
-    console.log('[Maintenance] Rebuilding statistics...');
+    logger.info('[Maintenance] Rebuilding statistics...');
     
     const users = Array.from((db as any).users.values());
     for (const user of users) {
       const tasks = db.getUserTasks(user.id);
       const accounts = db.getUserAccounts(user.id);
       
-      console.log(`[Maintenance] User ${user.id}: ${tasks.length} tasks, ${accounts.length} accounts`);
+      logger.info(
+        `[Maintenance] User ${user.id}: ${tasks.length} tasks, ${accounts.length} accounts`
+      );
     }
   }
 
@@ -71,14 +74,14 @@ export class MaintenanceService {
    * تحسين الأداء: تحديث ذاكرة التخزين المؤقتة
    */
   async refreshCache(): Promise<void> {
-    console.log('[Maintenance] Refreshing cache...');
+    logger.info('[Maintenance] Refreshing cache...');
     
     const users = Array.from((db as any).users.values());
     for (const user of users) {
       const tasks = db.getUserTasks(user.id);
       // إعادة بناء الذاكرة المؤقتة للمهام النشطة
       for (const task of tasks.filter(t => t.status === 'active')) {
-        console.log(`[Cache] Cached task: ${task.name}`);
+        logger.info(`[Cache] Cached task: ${task.name}`);
       }
     }
   }
@@ -87,7 +90,7 @@ export class MaintenanceService {
    * تحسين الأداء: الفهرسة
    */
   async optimizeIndexes(): Promise<void> {
-    console.log('[Maintenance] Optimizing indexes...');
+    logger.info('[Maintenance] Optimizing indexes...');
     // في الإنتاج: استخدم REINDEX في PostgreSQL
   }
 
@@ -149,7 +152,7 @@ export class MaintenanceService {
    * تشغيل الصيانة الدورية
    */
   async runFullMaintenance(): Promise<void> {
-    console.log('[Maintenance] Starting full maintenance...');
+    logger.info('[Maintenance] Starting full maintenance...');
 
     try {
       await this.cleanupOldExecutions();
@@ -160,15 +163,15 @@ export class MaintenanceService {
 
       const expiredTokens = await this.checkExpiredTokens();
       if (expiredTokens.length > 0) {
-        console.log(`[Maintenance] Found ${expiredTokens.length} expired tokens`);
+        logger.info(`[Maintenance] Found ${expiredTokens.length} expired tokens`);
       }
 
       const health = await this.healthCheck();
-      console.log('[Maintenance] Health check:', health);
+      logger.info('[Maintenance] Health check:', health);
 
-      console.log('[Maintenance] Full maintenance completed successfully');
+      logger.info('[Maintenance] Full maintenance completed successfully');
     } catch (error) {
-      console.error('[Maintenance] Error during maintenance:', error);
+      logger.error('[Maintenance] Error during maintenance:', error);
     }
   }
 }

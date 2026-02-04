@@ -7,6 +7,7 @@ import { StatCard } from '@/components/common/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { db, type Task } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { BarChart3, Zap, Users, TrendingUp, Plus, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,30 +23,30 @@ export default function DashboardPage() {
   const [recentExecutions, setRecentExecutions] = useState<any[]>([]);
 
   useEffect(() => {
-    console.log('[v0] Dashboard: Component mounted');
+    logger.info('[v0] Dashboard: Component mounted');
     
     try {
       // جلب البيانات
       const users = Array.from((db as any).users.values());
-      console.log('[v0] Dashboard: Found users:', users.length);
+      logger.info('[v0] Dashboard: Found users:', users.length);
       const user = users[0];
 
       if (user) {
-        console.log('[v0] Dashboard: Loading data for user:', user.id);
+        logger.info('[v0] Dashboard: Loading data for user:', user.id);
         const userTasks = db.getUserTasks(user.id);
         const userAccounts = db.getUserAccounts(user.id);
         const activeTasks = userTasks.filter(t => t.status === 'active');
 
-        console.log('[v0] Dashboard: Tasks:', userTasks.length);
-        console.log('[v0] Dashboard: Accounts:', userAccounts.length);
-        console.log('[v0] Dashboard: Active tasks:', activeTasks.length);
+        logger.info('[v0] Dashboard: Tasks:', userTasks.length);
+        logger.info('[v0] Dashboard: Accounts:', userAccounts.length);
+        logger.info('[v0] Dashboard: Active tasks:', activeTasks.length);
 
         const allExecutions = userTasks.flatMap(t => {
           const execs = db.getTaskExecutions(t.id);
           return Array.isArray(execs) ? execs : [];
         });
         
-        console.log('[v0] Dashboard: Total executions:', allExecutions.length);
+        logger.info('[v0] Dashboard: Total executions:', allExecutions.length);
 
         setStats({
           totalTasks: userTasks.length,
@@ -62,12 +63,12 @@ export default function DashboardPage() {
             .slice(0, 5)
         );
         
-        console.log('[v0] Dashboard: Dashboard data loaded successfully');
+        logger.info('[v0] Dashboard: Dashboard data loaded successfully');
       } else {
-        console.warn('[v0] Dashboard: No users found');
+        logger.warn('[v0] Dashboard: No users found');
       }
     } catch (error) {
-      console.error('[v0] Dashboard: Error loading dashboard data:', error);
+      logger.error('[v0] Dashboard: Error loading dashboard data:', error);
     }
   }, []);
 

@@ -25,6 +25,7 @@ import {
   Calendar,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { logger } from '@/lib/logger'
 
 const platforms = [
   { id: 'facebook', name: 'Facebook', icon: Facebook },
@@ -91,7 +92,7 @@ export default function CreatePostPage() {
       status: scheduleType === 'now' ? 'publishing' : 'scheduled',
     }
 
-    console.log('[v0] Post created:', postData)
+    logger.info('[v0] Post created:', postData)
     toast.success(scheduleType === 'now' ? 'Post published!' : 'Post scheduled!')
 
     // Reset form

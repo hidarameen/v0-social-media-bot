@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { db, type PlatformAccount } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { platformConfigs } from '@/lib/platforms/handlers';
 import { ArrowRight, Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -38,17 +39,17 @@ export default function CreateTaskPage() {
   const [selectedTargetPlatform, setSelectedTargetPlatform] = useState('');
 
   useEffect(() => {
-    console.log('[v0] CreateTaskPage: Component mounted');
+    logger.info('[v0] CreateTaskPage: Component mounted');
     const users = Array.from((db as any).users.values());
-    console.log('[v0] CreateTaskPage: Found users:', users.length);
+    logger.info('[v0] CreateTaskPage: Found users:', users.length);
     const user = users[0];
     if (user) {
-      console.log('[v0] CreateTaskPage: User found:', user.id);
+      logger.info('[v0] CreateTaskPage: User found:', user.id);
       const userAccounts = db.getUserAccounts(user.id);
-      console.log('[v0] CreateTaskPage: User accounts:', userAccounts.length);
+      logger.info('[v0] CreateTaskPage: User accounts:', userAccounts.length);
       setAccounts(userAccounts);
     } else {
-      console.warn('[v0] CreateTaskPage: No users found in database');
+      logger.warn('[v0] CreateTaskPage: No users found in database');
     }
   }, []);
 
@@ -61,21 +62,21 @@ export default function CreateTaskPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[v0] handleSubmit: Form submitted');
-    console.log('[v0] formData:', formData);
+    logger.info('[v0] handleSubmit: Form submitted');
+    logger.info('[v0] formData:', formData);
 
     if (!formData.name || formData.sourceAccounts.length === 0 || formData.targetAccounts.length === 0) {
-      console.warn('[v0] handleSubmit: Validation failed - missing required fields');
+      logger.warn('[v0] handleSubmit: Validation failed - missing required fields');
       alert('Please fill in all required fields');
       return;
     }
 
     const users = Array.from((db as any).users.values());
-    console.log('[v0] handleSubmit: Users found:', users.length);
+    logger.info('[v0] handleSubmit: Users found:', users.length);
     const user = users[0];
 
     if (user) {
-      console.log('[v0] handleSubmit: Creating task for user:', user.id);
+      logger.info('[v0] handleSubmit: Creating task for user:', user.id);
       try {
         const taskId = db.createTask({
           userId: user.id,
@@ -89,13 +90,13 @@ export default function CreateTaskPage() {
           scheduleTime: formData.scheduleTime ? new Date(formData.scheduleTime) : undefined,
           recurringPattern: formData.recurringPattern,
         });
-        console.log('[v0] handleSubmit: Task created successfully:', taskId);
+        logger.info('[v0] handleSubmit: Task created successfully:', taskId);
         router.push('/tasks');
       } catch (error) {
-        console.error('[v0] handleSubmit: Error creating task:', error);
+        logger.error('[v0] handleSubmit: Error creating task:', error);
       }
     } else {
-      console.error('[v0] handleSubmit: No user found');
+      logger.error('[v0] handleSubmit: No user found');
     }
   };
 
