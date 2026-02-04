@@ -8,6 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { logger } from '@/lib/logger';
 import type { Task, TaskExecution } from '@/lib/db';
+
+import { db, type Task } from '@/lib/db';
+import { logger } from '@/lib/logger';
 import { BarChart3, Zap, Users, TrendingUp, Plus, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 
@@ -43,6 +46,53 @@ export default function DashboardPage() {
     };
 
     void loadDashboard();
+    logger.info('[v0] Dashboard: Component mounted');
+    
+    try {
+      // جلب البيانات
+      const users = Array.from((db as any).users.values());
+      logger.info('[v0] Dashboard: Found users:', users.length);
+      const user = users[0];
+
+      if (user) {
+        logger.info('[v0] Dashboard: Loading data for user:', user.id);
+        const userTasks = db.getUserTasks(user.id);
+        const userAccounts = db.getUserAccounts(user.id);
+        const activeTasks = userTasks.filter(t => t.status === 'active');
+
+        logger.info('[v0] Dashboard: Tasks:', userTasks.length);
+        logger.info('[v0] Dashboard: Accounts:', userAccounts.length);
+        logger.info('[v0] Dashboard: Active tasks:', activeTasks.length);
+
+        const allExecutions = userTasks.flatMap(t => {
+          const execs = db.getTaskExecutions(t.id);
+          return Array.isArray(execs) ? execs : [];
+        });
+        
+        logger.info('[v0] Dashboard: Total executions:', allExecutions.length);
+
+        setStats({
+          totalTasks: userTasks.length,
+          totalAccounts: userAccounts.length,
+          activeTasksCount: activeTasks.length,
+          totalExecutions: allExecutions.length,
+        });
+
+        setRecentTasks(userTasks.slice(-5).reverse());
+
+        setRecentExecutions(
+          allExecutions
+            .sort((a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime())
+            .slice(0, 5)
+        );
+        
+        logger.info('[v0] Dashboard: Dashboard data loaded successfully');
+      } else {
+        logger.warn('[v0] Dashboard: No users found');
+      }
+    } catch (error) {
+      logger.error('[v0] Dashboard: Error loading dashboard data:', error);
+    }
   }, []);
 
   return (

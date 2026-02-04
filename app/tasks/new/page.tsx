@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { PlatformAccount } from '@/lib/db';
+import { db, type PlatformAccount } from '@/lib/db'; 
 import { logger } from '@/lib/logger';
 import { platformConfigs } from '@/lib/platforms/handlers';
 import { Save } from 'lucide-react';
@@ -53,6 +54,19 @@ export default function CreateTaskPage() {
     };
 
     void loadAccounts();
+
+    logger.info('[v0] CreateTaskPage: Component mounted');
+    const users = Array.from((db as any).users.values());
+    logger.info('[v0] CreateTaskPage: Found users:', users.length);
+    const user = users[0];
+    if (user) {
+      logger.info('[v0] CreateTaskPage: User found:', user.id);
+      const userAccounts = db.getUserAccounts(user.id);
+      logger.info('[v0] CreateTaskPage: User accounts:', userAccounts.length);
+      setAccounts(userAccounts);
+    } else {
+      logger.warn('[v0] CreateTaskPage: No users found in database');
+    }
   }, []);
 
   const sourcePlatformAccounts = accounts.filter(
@@ -79,6 +93,15 @@ export default function CreateTaskPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+    const users = Array.from((db as any).users.values());
+    logger.info('[v0] handleSubmit: Users found:', users.length);
+    const user = users[0];
+
+    if (user) {
+      logger.info('[v0] handleSubmit: Creating task for user:', user.id);
+      try {
+        const taskId = db.createTask({
+          userId: user.id,
           name: formData.name,
           description: formData.description,
           sourceAccounts: formData.sourceAccounts,
@@ -100,6 +123,16 @@ export default function CreateTaskPage() {
       router.push('/tasks');
     } catch (error) {
       logger.error('[v0] handleSubmit: Error creating task:', error);
+
+        });
+        logger.info('[v0] handleSubmit: Task created successfully:', taskId);
+        router.push('/tasks');
+      } catch (error) {
+        logger.error('[v0] handleSubmit: Error creating task:', error);
+      }
+    } else {
+      logger.error('[v0] handleSubmit: No user found');
+ 
     }
   };
 

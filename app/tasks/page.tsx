@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Task } from '@/lib/db';
+import { db, type Task } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { Plus, Search, Edit2, Trash2, Play, Pause, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -34,6 +35,20 @@ export default function TasksPage() {
     };
 
     void loadTasks();
+    logger.info('[v0] TasksPage: Component mounted');
+    const users = Array.from((db as any).users.values());
+    logger.info('[v0] TasksPage: Found users:', users.length);
+    const user = users[0];
+
+    if (user) {
+      logger.info('[v0] TasksPage: Loading tasks for user:', user.id);
+      const userTasks = db.getUserTasks(user.id);
+      logger.info('[v0] TasksPage: Tasks loaded:', userTasks.length);
+      setTasks(userTasks);
+      setFilteredTasks(userTasks);
+    } else {
+      logger.warn('[v0] TasksPage: No users found');
+    }
   }, []);
 
   useEffect(() => {
@@ -55,6 +70,14 @@ export default function TasksPage() {
         }
         logger.info('[v0] handleDelete: Task deleted successfully');
         setTasks(prev => prev.filter(t => t.id !== taskId));
+
+  const handleDelete = (taskId: string) => {
+    logger.info('[v0] handleDelete: Attempting to delete task:', taskId);
+    if (confirm('Are you sure you want to delete this task?')) {
+      try {
+        db.deleteTask(taskId);
+        logger.info('[v0] handleDelete: Task deleted successfully');
+        setTasks(tasks.filter(t => t.id !== taskId));
       } catch (error) {
         logger.error('[v0] handleDelete: Error deleting task:', error);
       }
@@ -76,6 +99,10 @@ export default function TasksPage() {
       }
       logger.info('[v0] handleToggleStatus: Status updated successfully');
       setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, status: newStatus } : t)));
+
+      db.updateTask(task.id, { status: newStatus as any });
+      logger.info('[v0] handleToggleStatus: Status updated successfully');
+      setTasks(tasks.map(t => (t.id === task.id ? { ...t, status: newStatus as any } : t)));
     } catch (error) {
       logger.error('[v0] handleToggleStatus: Error updating status:', error);
     }
