@@ -13,9 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { db, type TaskExecution, type Task } from '@/lib/db';
-import { Search, Filter, Download, RefreshCw, ChevronDown } from 'lucide-react';
-import { useState as useStateHook } from 'react';
+import type { TaskExecution } from '@/lib/db';
+import { logger } from '@/lib/logger';
+import { Search, Download, RefreshCw, ChevronDown } from 'lucide-react';
 
 interface ExpandedExecution extends TaskExecution {
   taskName?: string;
@@ -28,30 +28,27 @@ export default function ExecutionsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failed'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const users = Array.from((db as any).users.values());
-    const user = users[0];
+  const loadExecutions = async () => {
+    try {
+      const response = await fetch('/api/executions?userId=demo-user');
+      const payload = await response.json();
 
-    if (user) {
-      const userTasks = db.getUserTasks(user.id);
-      const allExecutions: ExpandedExecution[] = [];
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to load executions');
+      }
 
-      userTasks.forEach(task => {
-        const taskExecutions = db.getTaskExecutions(task.id);
-        taskExecutions.forEach(exec => {
-          allExecutions.push({
-            ...exec,
-            taskName: task.name,
-          });
-        });
-      });
-
-      const sorted = allExecutions.sort(
-        (a, b) => b.executedAt.getTime() - a.executedAt.getTime()
+      const sorted = (payload.executions as ExpandedExecution[]).sort(
+        (a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime()
       );
       setExecutions(sorted);
       setFilteredExecutions(sorted);
+    } catch (error) {
+      logger.error('[v0] ExecutionsPage: Failed to load executions:', error);
     }
+  };
+
+  useEffect(() => {
+    void loadExecutions();
   }, []);
 
   useEffect(() => {
@@ -75,30 +72,7 @@ export default function ExecutionsPage() {
   }, [searchTerm, statusFilter, executions]);
 
   const handleRefresh = () => {
-    // Refresh executions
-    const users = Array.from((db as any).users.values());
-    const user = users[0];
-
-    if (user) {
-      const userTasks = db.getUserTasks(user.id);
-      const allExecutions: ExpandedExecution[] = [];
-
-      userTasks.forEach(task => {
-        const taskExecutions = db.getTaskExecutions(task.id);
-        taskExecutions.forEach(exec => {
-          allExecutions.push({
-            ...exec,
-            taskName: task.name,
-          });
-        });
-      });
-
-      const sorted = allExecutions.sort(
-        (a, b) => b.executedAt.getTime() - a.executedAt.getTime()
-      );
-      setExecutions(sorted);
-      setFilteredExecutions(sorted);
-    }
+    void loadExecutions();
   };
 
   const stats = {

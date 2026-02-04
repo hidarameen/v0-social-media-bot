@@ -1,7 +1,5 @@
 'use client';
 
-import React from "react"
-
 import { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
@@ -23,9 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { db, type PlatformAccount } from '@/lib/db';
+import type { PlatformAccount } from '@/lib/db';
 import { platformConfigs, type PlatformId } from '@/lib/platforms/handlers';
 import { Plus, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
@@ -37,15 +36,24 @@ export default function AccountsPage() {
     accessToken: '',
   });
 
-  useEffect(() => {
-    const users = Array.from((db as any).users.values());
-    const user = users[0];
-    if (user) {
-      setAccounts(db.getUserAccounts(user.id));
+  const loadAccounts = async () => {
+    try {
+      const response = await fetch('/api/accounts?userId=demo-user');
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to load accounts');
+      }
+      setAccounts(payload.accounts);
+    } catch (error) {
+      logger.error('[v0] AccountsPage: Failed to load accounts:', error);
     }
+  };
+
+  useEffect(() => {
+    void loadAccounts();
   }, []);
 
-  const handleAddAccount = (e: React.FormEvent) => {
+  const handleAddAccount = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!selectedPlatform || !formData.accountName || !formData.accessToken) {
@@ -53,19 +61,22 @@ export default function AccountsPage() {
       return;
     }
 
-    const users = Array.from((db as any).users.values());
-    const user = users[0];
-
-    if (user) {
-      db.createAccount({
-        userId: user.id,
-        platformId: selectedPlatform,
-        accountName: formData.accountName,
-        accountUsername: formData.accountUsername,
-        accountId: `${selectedPlatform}_${Date.now()}`,
-        accessToken: formData.accessToken,
-        isActive: true,
+    try {
+      const response = await fetch('/api/accounts?userId=demo-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: selectedPlatform,
+          username: formData.accountUsername || formData.accountName,
+          accountId: `${selectedPlatform}_${Date.now()}`,
+          displayName: formData.accountName,
+          accessToken: formData.accessToken,
+        }),
       });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to create account');
+      }
 
       setFormData({
         accountName: '',
@@ -75,26 +86,44 @@ export default function AccountsPage() {
       setSelectedPlatform('');
       setOpen(false);
 
-      // Refresh accounts
-      const updatedAccounts = db.getUserAccounts(user.id);
-      setAccounts(updatedAccounts);
+      await loadAccounts();
+    } catch (error) {
+      logger.error('[v0] AccountsPage: Failed to create account:', error);
     }
   };
 
-  const handleDeleteAccount = (accountId: string) => {
+  const handleDeleteAccount = async (accountId: string) => {
     if (confirm('Are you sure you want to delete this account?')) {
-      db.deleteAccount(accountId);
-      setAccounts(accounts.filter(a => a.id !== accountId));
+      try {
+        const response = await fetch(`/api/accounts/${accountId}`, { method: 'DELETE' });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+          throw new Error(payload.error || 'Failed to delete account');
+        }
+        setAccounts(prev => prev.filter(a => a.id !== accountId));
+      } catch (error) {
+        logger.error('[v0] AccountsPage: Failed to delete account:', error);
+      }
     }
   };
 
-  const handleToggleStatus = (account: PlatformAccount) => {
-    db.updateAccount(account.id, { isActive: !account.isActive });
-    setAccounts(
-      accounts.map(a =>
-        a.id === account.id ? { ...a, isActive: !a.isActive } : a
-      )
-    );
+  const handleToggleStatus = async (account: PlatformAccount) => {
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: !account.isActive }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to update account');
+      }
+      setAccounts(prev =>
+        prev.map(a => (a.id === account.id ? { ...a, isActive: !a.isActive } : a))
+      );
+    } catch (error) {
+      logger.error('[v0] AccountsPage: Failed to update account:', error);
+    }
   };
 
   const platformAccountsMap = platformConfigs;

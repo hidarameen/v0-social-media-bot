@@ -1,6 +1,7 @@
 // خدمات المعالجة المتقدمة والتحسينات الذكية
 
 import { db, type Task } from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 /**
  * تحسينات UX والأداء:
@@ -33,11 +34,13 @@ export class AdvancedProcessingService {
 
     for (let attempt = 0; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
-        console.log(`[Processing] Attempt ${attempt + 1}/${this.retryConfig.maxRetries + 1}: ${context}`);
+        logger.info(
+          `[Processing] Attempt ${attempt + 1}/${this.retryConfig.maxRetries + 1}: ${context}`
+        );
         return await fn();
       } catch (error) {
         lastError = error as Error;
-        console.error(`[Processing] Error on attempt ${attempt + 1}:`, lastError);
+        logger.error(`[Processing] Error on attempt ${attempt + 1}:`, lastError);
 
         if (attempt < this.retryConfig.maxRetries) {
           const delay = Math.min(
@@ -45,13 +48,15 @@ export class AdvancedProcessingService {
               Math.pow(this.retryConfig.backoffMultiplier, attempt),
             this.retryConfig.maxDelay
           );
-          console.log(`[Processing] Retrying in ${delay}ms...`);
+          logger.info(`[Processing] Retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
-    console.error(`[Processing] Failed after ${this.retryConfig.maxRetries + 1} attempts: ${context}`);
+    logger.error(
+      `[Processing] Failed after ${this.retryConfig.maxRetries + 1} attempts: ${context}`
+    );
     return null;
   }
 
@@ -61,21 +66,21 @@ export class AdvancedProcessingService {
   getCached<T>(key: string): T | null {
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-      console.log(`[Cache] Hit for key: ${key}`);
+      logger.info(`[Cache] Hit for key: ${key}`);
       return cached.data;
     }
-    console.log(`[Cache] Miss for key: ${key}`);
+    logger.info(`[Cache] Miss for key: ${key}`);
     return null;
   }
 
   setCached(key: string, data: any): void {
     this.cache.set(key, { data, timestamp: Date.now() });
-    console.log(`[Cache] Stored key: ${key}`);
+    logger.info(`[Cache] Stored key: ${key}`);
   }
 
   clearCache(): void {
     this.cache.clear();
-    console.log('[Cache] Cleared all cached data');
+    logger.info('[Cache] Cleared all cached data');
   }
 
   /**
@@ -85,7 +90,7 @@ export class AdvancedProcessingService {
     tasks: Task[],
     processor: (task: Task) => Promise<any>
   ): Promise<{ successful: number; failed: number }> {
-    console.log(`[Processing] Starting batch processing of ${tasks.length} tasks`);
+    logger.info(`[Processing] Starting batch processing of ${tasks.length} tasks`);
 
     const batchSize = 5; // معالجة 5 مهام في نفس الوقت
     let successful = 0;
@@ -102,12 +107,12 @@ export class AdvancedProcessingService {
           successful++;
         } else {
           failed++;
-          console.error('[Processing] Batch item failed:', result.reason);
+          logger.error('[Processing] Batch item failed:', result.reason);
         }
       });
     }
 
-    console.log(
+    logger.info(
       `[Processing] Batch complete: ${successful} successful, ${failed} failed`
     );
     return { successful, failed };
@@ -116,8 +121,8 @@ export class AdvancedProcessingService {
   /**
    * تحسين جدولة المهام بناءً على الأداء التاريخية
    */
-  getOptimalScheduleTime(task: Task): Date {
-    const executions = db.getTaskExecutions(task.id);
+  async getOptimalScheduleTime(task: Task): Promise<Date> {
+    const executions = await db.getTaskExecutions(task.id);
 
     if (executions.length === 0) {
       return new Date(Date.now() + 60000); // بعد دقيقة
@@ -148,12 +153,12 @@ export class AdvancedProcessingService {
   /**
    * تحليل الأخطاء واقتراح الإصلاحات
    */
-  analyzeErrors(task: Task): {
+  async analyzeErrors(task: Task): Promise<{
     pattern: string;
     suggestion: string;
     severity: 'low' | 'medium' | 'high';
-  }[] {
-    const executions = db.getTaskExecutions(task.id);
+  }[]> {
+    const executions = await db.getTaskExecutions(task.id);
     
     // التحقق من أن executions هو مصفوفة
     if (!Array.isArray(executions) || executions.length === 0) {
@@ -212,8 +217,8 @@ export class AdvancedProcessingService {
   /**
    * توقع الفشل
    */
-  predictFailure(task: Task): { riskLevel: number; factors: string[] } {
-    const executions = db.getTaskExecutions(task.id);
+  async predictFailure(task: Task): Promise<{ riskLevel: number; factors: string[] }> {
+    const executions = await db.getTaskExecutions(task.id);
     const factors: string[] = [];
     let riskScore = 0;
 
@@ -235,10 +240,10 @@ export class AdvancedProcessingService {
     }
 
     // العامل 2: حالة الحسابات
-    const sourceAccounts = task.sourceAccounts
-      .map(id => db.getAccount(id))
-      .filter(Boolean);
-    const inactiveAccounts = sourceAccounts.filter(a => !a.isActive).length;
+    const sourceAccounts = (
+      await Promise.all(task.sourceAccounts.map(id => db.getAccount(id)))
+    ).filter(Boolean);
+    const inactiveAccounts = sourceAccounts.filter(a => !a?.isActive).length;
     if (inactiveAccounts > 0) {
       factors.push(`${inactiveAccounts} source account(s) inactive`);
       riskScore += 30;
@@ -261,13 +266,13 @@ export class AdvancedProcessingService {
   /**
    * تقارير أداء مفصلة
    */
-  generatePerformanceReport(task: Task): {
+  async generatePerformanceReport(task: Task): Promise<{
     summary: string;
     uptime: string;
     averageExecutionTime: string;
     recommendations: string[];
-  } {
-    const executions = db.getTaskExecutions(task.id);
+  }> {
+    const executions = await db.getTaskExecutions(task.id);
 
     // التحقق من أن executions هو مصفوفة وليست فارغة
     if (!Array.isArray(executions) || executions.length === 0) {
