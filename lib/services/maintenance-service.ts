@@ -2,6 +2,9 @@
 
 import { db, ensureUserExists } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { db } from '@/lib/db';
+import { logger } from '@/lib/logger';
+import { taskProcessor } from './task-processor';
 
 export class MaintenanceService {
   /**
